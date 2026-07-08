@@ -63,10 +63,10 @@ function requireLocalAccessCode(request: Request): RequestUser | null {
 }
 
 export function requireWorkerToken(request: Request): void {
-  const expected = process.env.WORKER_TOKEN;
+  const expected = getOptionalEnv("WORKER_TOKEN");
   const actual = request.headers.get("x-worker-token");
 
-  if (!expected || expected.trim() === "") {
+  if (!expected) {
     throw new AppError("worker_token_missing", "WORKER_TOKEN が未設定です。", 500);
   }
 
