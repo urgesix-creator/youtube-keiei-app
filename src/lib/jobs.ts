@@ -231,8 +231,12 @@ export async function completeJobFromTranscript(input: {
   });
 
   const filename = buildMarkdownFileName(outputs.generatedTitle, job.video_id);
-  const driveResult = await uploadMarkdownToDrive({ filename, markdown });
   const appResultUrl = `${getAppBaseUrl()}/?job=${job.id}`;
+  const driveResult = await uploadMarkdownToDrive({
+    filename,
+    markdown,
+    fallbackUrl: appResultUrl,
+  });
 
   const output = await upsertOutputs(job.id, outputs);
   const { data: updatedJob, error: updateError } = await supabase

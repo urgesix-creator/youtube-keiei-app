@@ -11,7 +11,15 @@ export type DriveUploadResult = {
 export async function uploadMarkdownToDrive(input: {
   filename: string;
   markdown: string;
+  fallbackUrl?: string;
 }): Promise<DriveUploadResult> {
+  if (!hasGoogleDriveConfig() && isVercelRuntime()) {
+    return {
+      fileId: `vercel:${input.filename}`,
+      webViewLink: input.fallbackUrl ?? getAppBaseUrl(),
+    };
+  }
+
   await saveMarkdownLocally(input);
   await saveMarkdownToObsidian(input);
 
@@ -74,6 +82,10 @@ function hasGoogleDriveConfig(): boolean {
       getOptionalEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL") &&
       getOptionalEnv("GOOGLE_PRIVATE_KEY"),
   );
+}
+
+function isVercelRuntime(): boolean {
+  return getOptionalEnv("VERCEL") === "1";
 }
 
 export function getGoogleAuth() {
