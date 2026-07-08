@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { getAllowedEmails, getOptionalEnv } from "@/lib/env";
 import { getSupabaseAuth } from "@/lib/supabase/server";
@@ -8,7 +9,7 @@ export type RequestUser = {
 };
 
 export async function requireRequestUser(request: Request): Promise<RequestUser> {
-  const localUser = requireLocalAccessCode(request);
+  const localUser = requireLocalPasswordLogin(request);
   if (localUser) {
     return localUser;
   }
@@ -39,27 +40,40 @@ export async function requireRequestUser(request: Request): Promise<RequestUser>
   };
 }
 
-function requireLocalAccessCode(request: Request): RequestUser | null {
-  const expected = getOptionalEnv("APP_ACCESS_CODE");
+function requireLocalPasswordLogin(request: Request): RequestUser | null {
+  const expectedLoginId = getOptionalEnv("APP_LOGIN_ID");
+  const expectedPassword = getOptionalEnv("APP_LOGIN_PASSWORD");
   const userId = getOptionalEnv("APP_USER_ID");
-  const actual = request.headers.get("x-app-access-code");
+  const actualLoginId = request.headers.get("x-app-login-id")?.trim() ?? null;
+  const actualPassword = request.headers.get("x-app-login-password");
 
-  if (!expected && !actual) {
+  if (!expectedLoginId && !expectedPassword && !actualLoginId && !actualPassword) {
     return null;
   }
 
-  if (!expected || !userId) {
-    throw new AppError("local_auth_not_configured", "APP_ACCESS_CODE または APP_USER_ID が未設定です。", 500);
+  if (!expectedLoginId || !expectedPassword || !userId) {
+    throw new AppError("local_auth_not_configured", "APP_LOGIN_ID、APP_LOGIN_PASSWORD、APP_USER_ID のいずれかが未設定です。", 500);
   }
 
-  if (actual !== expected) {
-    throw new AppError("unauthorized", "アクセスコードが違います。", 401);
+  if (
+    !actualLoginId ||
+    !actualPassword ||
+    !safeEqual(actualLoginId, expectedLoginId) ||
+    !safeEqual(actualPassword, expectedPassword)
+  ) {
+    throw new AppError("unauthorized", "IDまたはパスワードが違います。", 401);
   }
 
   return {
     id: userId,
-    email: "local-user",
+    email: actualLoginId,
   };
+}
+
+function safeEqual(actual: string, expected: string): boolean {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export function requireWorkerToken(request: Request): void {

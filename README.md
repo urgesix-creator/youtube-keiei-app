@@ -6,7 +6,7 @@
 
 - Webアプリ: Next.js App Router
 - 配置先: Macローカル常駐。必要に応じてVercelへ配置
-- 認証: ローカルアクセスコード。必要に応じてSupabase Auth併用
+- 認証: ローカルID・パスワード。必要に応じてSupabase Auth併用
 - 履歴DB: Supabase Postgres
 - AI生成: OpenAI API
 - 保存: Google Drive Markdown
@@ -43,7 +43,7 @@ npm install
 supabase/migrations/20260708000000_initial_schema.sql
 ```
 
-4. `.env.local` に `APP_ACCESS_CODE` と `APP_USER_ID` を設定する
+4. `.env.local` に `APP_LOGIN_ID`、`APP_LOGIN_PASSWORD`、`APP_USER_ID` を設定する
 
 5. 外部公開する場合は、Vercel環境変数に `.env.example` と同じ値を設定する
 
@@ -99,7 +99,7 @@ USE_MOCK_AI=true
 - Chrome実画面操作は、YouTubeや拡張機能の画面変更で失敗する可能性があります。
 - Google Drive保存には、サービスアカウントが保存先フォルダへ書き込める必要があります。未設定の場合はローカルMarkdownリンクとObsidian保存で完了します。
 - Slack DM送信にはSlack Appの権限と自分のSlackユーザーIDが必要です。
-- `SUPABASE_SERVICE_ROLE_KEY`、`OPENAI_API_KEY`、`APP_ACCESS_CODE`、`SLACK_BOT_TOKEN`、`GOOGLE_PRIVATE_KEY` はブラウザに出さないでください。
+- `SUPABASE_SERVICE_ROLE_KEY`、`OPENAI_API_KEY`、`APP_LOGIN_PASSWORD`、`SLACK_BOT_TOKEN`、`GOOGLE_PRIVATE_KEY` はブラウザに出さないでください。
 
 ## 仕様書
 

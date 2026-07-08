@@ -14,12 +14,19 @@ import {
   Search,
   Send,
   Upload,
+  UserRound,
 } from "lucide-react";
 import type { ContentJob, JobStatus, JobWithOutput, SelectedOutput } from "@/lib/types";
 
 type View = "new" | "history" | "result" | "manual";
 type ApiState = "idle" | "loading" | "error";
-const accessCodeStorageKey = "youtube-keiei-access-code";
+type LoginCredentials = {
+  loginId: string;
+  password: string;
+};
+
+const credentialsStorageKey = "youtube-keiei-login-credentials";
+const legacyAccessCodeStorageKey = "youtube-keiei-access-code";
 
 const outputOptions: Array<{ id: SelectedOutput; label: string }> = [
   { id: "report", label: "経営実践レポート" },
@@ -50,7 +57,10 @@ const statusLabels: Record<JobStatus, string> = {
 };
 
 export function YoutubeApp() {
-  const [accessCode, setAccessCode] = useState("");
+  const [credentials, setCredentials] = useState<LoginCredentials>({
+    loginId: "",
+    password: "",
+  });
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [view, setView] = useState<View>("new");
   const [jobs, setJobs] = useState<ContentJob[]>([]);
@@ -65,12 +75,24 @@ export function YoutubeApp() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedCode = window.localStorage.getItem(accessCodeStorageKey);
-    if (savedCode) {
-      window.queueMicrotask(() => {
-        setAccessCode(savedCode);
-        setIsUnlocked(true);
-      });
+    window.localStorage.removeItem(legacyAccessCodeStorageKey);
+
+    const savedCredentials = window.localStorage.getItem(credentialsStorageKey);
+    if (!savedCredentials) return;
+
+    try {
+      const parsed = JSON.parse(savedCredentials) as Partial<LoginCredentials>;
+      if (parsed.loginId && parsed.password) {
+        window.queueMicrotask(() => {
+          setCredentials({
+            loginId: parsed.loginId ?? "",
+            password: parsed.password ?? "",
+          });
+          setIsUnlocked(true);
+        });
+      }
+    } catch {
+      window.localStorage.removeItem(credentialsStorageKey);
     }
   }, []);
 
@@ -86,36 +108,62 @@ export function YoutubeApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUnlocked]);
 
-  function signIn() {
-    const normalizedCode = accessCode.trim();
-    if (!normalizedCode) {
-      setMessage("アクセスコードを入力してください。");
+  async function signIn() {
+    const normalizedLoginId = credentials.loginId.trim();
+    const password = credentials.password;
+    if (!normalizedLoginId || !password) {
+      setMessage("IDとパスワードを入力してください。");
       return;
     }
-    window.localStorage.setItem(accessCodeStorageKey, normalizedCode);
-    setAccessCode(normalizedCode);
-    setIsUnlocked(true);
-    setMessage(null);
+
+    setApiState("loading");
+    try {
+      const normalizedCredentials = {
+        loginId: normalizedLoginId,
+        password,
+      };
+      const response = await fetch("/api/auth/check", {
+        method: "POST",
+        headers: buildAuthHeaders(normalizedCredentials),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "ログインに失敗しました。");
+      }
+
+      window.localStorage.setItem(credentialsStorageKey, JSON.stringify(normalizedCredentials));
+      setCredentials(normalizedCredentials);
+      setIsUnlocked(true);
+      setMessage(null);
+      setApiState("idle");
+    } catch (error) {
+      setApiState("error");
+      setMessage(error instanceof Error ? error.message : "ログインに失敗しました。");
+    }
   }
 
   function signOut() {
-    window.localStorage.removeItem(accessCodeStorageKey);
+    window.localStorage.removeItem(credentialsStorageKey);
+    window.localStorage.removeItem(legacyAccessCodeStorageKey);
     setIsUnlocked(false);
-    setAccessCode("");
+    setCredentials({
+      loginId: "",
+      password: "",
+    });
     setSelectedJob(null);
     setJobs([]);
   }
 
   async function apiFetch(path: string, init: RequestInit = {}) {
-    if (!accessCode) {
-      throw new Error("アクセスコードがありません。");
+    if (!credentials.loginId || !credentials.password) {
+      throw new Error("ログイン情報がありません。");
     }
 
     const response = await fetch(path, {
       ...init,
       headers: {
         "content-type": "application/json",
-        "x-app-access-code": accessCode,
+        ...buildAuthHeaders(credentials),
         ...init.headers,
       },
     });
@@ -236,17 +284,41 @@ export function YoutubeApp() {
               YouTube経営実践アプリ
             </h1>
             <p className="mt-4 text-sm leading-6 text-stone-600 dark:text-stone-300">
-              アクセスコードを入れると、YouTubeリンクから文字起こし取得、要約、媒体別原稿生成、Drive保存まで実行できます。
+              IDとパスワードを入れると、YouTubeリンクから文字起こし取得、要約、媒体別原稿生成、Drive保存まで実行できます。
             </p>
-            <label className="mt-6 block text-sm font-medium" htmlFor="access-code">
-              アクセスコード
+            <label className="mt-6 block text-sm font-medium" htmlFor="login-id">
+              ID
             </label>
             <input
-              id="access-code"
-              value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value)}
+              id="login-id"
+              value={credentials.loginId}
+              onChange={(event) =>
+                setCredentials((current) => ({
+                  ...current,
+                  loginId: event.target.value,
+                }))
+              }
               onKeyDown={(event) => {
-                if (event.key === "Enter") signIn();
+                if (event.key === "Enter") void signIn();
+              }}
+              type="text"
+              autoComplete="username"
+              className="mt-2 h-12 w-full border border-stone-300 bg-white px-3 text-base outline-none focus:border-teal-600 dark:border-stone-700 dark:bg-stone-900"
+            />
+            <label className="mt-4 block text-sm font-medium" htmlFor="login-password">
+              パスワード
+            </label>
+            <input
+              id="login-password"
+              value={credentials.password}
+              onChange={(event) =>
+                setCredentials((current) => ({
+                  ...current,
+                  password: event.target.value,
+                }))
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void signIn();
               }}
               type="password"
               autoComplete="current-password"
@@ -255,10 +327,11 @@ export function YoutubeApp() {
             {message ? <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">{message}</p> : null}
             <button
               type="button"
-              onClick={signIn}
+              onClick={() => void signIn()}
+              disabled={apiState === "loading"}
               className="mt-6 flex h-12 w-full items-center justify-center gap-2 bg-stone-900 px-4 text-sm font-semibold text-white hover:bg-stone-700 dark:bg-teal-400 dark:text-stone-950 dark:hover:bg-teal-300"
             >
-              <Send size={18} />
+              {apiState === "loading" ? <Loader2 className="animate-spin" size={18} /> : <UserRound size={18} />}
               開く
             </button>
           </div>
@@ -488,6 +561,13 @@ export function YoutubeApp() {
       </div>
     </main>
   );
+}
+
+function buildAuthHeaders(credentials: LoginCredentials): Record<string, string> {
+  return {
+    "x-app-login-id": credentials.loginId.trim(),
+    "x-app-login-password": credentials.password,
+  };
 }
 
 function NavButton({
