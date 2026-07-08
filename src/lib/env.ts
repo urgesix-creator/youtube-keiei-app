@@ -2,15 +2,15 @@ import { ConfigError } from "@/lib/errors";
 
 export function getRequiredEnv(name: string): string {
   const value = process.env[name];
-  if (!value || value.trim() === "") {
+  const cleaned = cleanEnvValue(value);
+  if (!cleaned) {
     throw new ConfigError(`${name} が未設定です。`);
   }
-  return value;
+  return cleaned;
 }
 
 export function getOptionalEnv(name: string): string | null {
-  const value = process.env[name];
-  return value && value.trim() !== "" ? value : null;
+  return cleanEnvValue(process.env[name]);
 }
 
 export function getAllowedEmails(): string[] {
@@ -26,4 +26,10 @@ export function getAppBaseUrl(): string {
 
 export function shouldUseMockAi(): boolean {
   return getOptionalEnv("USE_MOCK_AI") === "true";
+}
+
+function cleanEnvValue(value: string | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/(?:\\n)+$/g, "").trim();
+  return cleaned === "" ? null : cleaned;
 }
