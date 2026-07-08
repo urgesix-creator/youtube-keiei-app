@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "worker": "node --env-file=.env.worker workers/chrome-worker.mjs",
+    "worker:install": "node scripts/install-worker-launch-agent.mjs",
+    "worker:uninstall": "node scripts/install-worker-launch-agent.mjs --uninstall",
     "sync:obsidian": "node --env-file=.env.worker scripts/sync-drive-to-obsidian.mjs"
   },
   "dependencies": {
